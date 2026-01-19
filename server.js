@@ -12,14 +12,14 @@ const Message = require("./models/Message");
 const app = express();
 
 // Middleware
-app.use(cors()); // you can limit origin to your frontend later
+app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
 // API routes
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 
-// Root route to confirm backend is live
+// Root route
 app.get("/", (req, res) => res.send("Backend is live ✅"));
 
 // HTTP + Socket.io
@@ -75,6 +75,6 @@ mongoose.connect(process.env.MONGO_URL, { useNewUrlParser: true, useUnifiedTopol
 .then(() => console.log("MongoDB connected"))
 .catch(err => console.error("Mongo error:", err));
 
-// Use Render dynamic PORT
+// Start server on Render's dynamic PORT
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
