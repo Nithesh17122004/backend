@@ -10,29 +10,32 @@ const messageRoutes = require("./routes/messageRoutes");
 const Message = require("./models/Message");
 
 const app = express();
-app.use(cors());
-app.use(express.json({ limit: "10mb" })); // IMPORTANT for attachments
 
+// Middleware
+app.use(cors()); // you can limit origin to your frontend later
+app.use(express.json({ limit: "10mb" }));
+
+// API routes
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 
+// Root route to confirm backend is live
+app.get("/", (req, res) => res.send("Backend is live ✅"));
+
+// HTTP + Socket.io
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: "*" }
-});
+const io = new Server(server, { cors: { origin: "*" } });
 
 const onlineUsers = {};
 
 io.on("connection", (socket) => {
   console.log("Socket connected:", socket.id);
 
-  /* ---------- LOGIN ---------- */
   socket.on("login", (username) => {
     onlineUsers[username] = socket.id;
     console.log(`${username} logged in`);
   });
 
-  /* ---------- SEND MESSAGE ---------- */
   socket.on("sendMessage", async (data) => {
     try {
       const { sender, receiver, message, attachment } = data;
@@ -46,20 +49,16 @@ io.on("connection", (socket) => {
 
       const savedMessage = await newMessage.save();
 
-      // send to receiver
       if (onlineUsers[receiver]) {
         io.to(onlineUsers[receiver]).emit("receiveMessage", savedMessage);
       }
 
-      // OPTIONAL: confirm delivery to sender
       io.to(socket.id).emit("messageSent", savedMessage);
-
     } catch (err) {
       console.error("Send message error:", err.message);
     }
   });
 
-  /* ---------- DISCONNECT ---------- */
   socket.on("disconnect", () => {
     for (const username in onlineUsers) {
       if (onlineUsers[username] === socket.id) {
@@ -71,15 +70,11 @@ io.on("connection", (socket) => {
   });
 });
 
-/* ---------- DB ---------- */
-mongoose.connect(
-  process.env.MONGO_URL || "mongodb://127.0.0.1:27017/chatApp"
-)
+// Connect to MongoDB Atlas
+mongoose.connect(process.env.MONGO_URL, { useNewUrlParser: true, useUnifiedTopology: true })
 .then(() => console.log("MongoDB connected"))
 .catch(err => console.error("Mongo error:", err));
 
-/* ---------- START ---------- */
+// Use Render dynamic PORT
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`Server running on ${PORT}`);
-});
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
