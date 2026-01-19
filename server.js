@@ -71,9 +71,10 @@ io.on("connection", (socket) => {
 });
 
 // Connect to MongoDB Atlas
-mongoose.connect(process.env.MONGO_URL, { useNewUrlParser: true, useUnifiedTopology: true })
-.then(() => console.log("MongoDB connected"))
-.catch(err => console.error("Mongo error:", err));
+mongoose.connect(process.env.MONGO_URL)
+  .then(() => console.log("MongoDB connected"))
+  .catch(err => console.error("Mongo error:", err));
+
 
 // Start server on Render's dynamic PORT
 const PORT = process.env.PORT || 5000;
