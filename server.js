@@ -7,27 +7,33 @@ require("dotenv").config();
 
 const authRoutes = require("./routes/authRoutes");
 const messageRoutes = require("./routes/messageRoutes");
+const alertRoutes = require("./routes/alertRoutes");
 const Message = require("./models/Message");
 
 const app = express();
 
-// Middleware
+// ---------- Middleware ----------
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
-// API routes
+// ---------- API Routes ----------
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 
-// Root route
+// Root check
 app.get("/", (req, res) => res.send("Backend is live ✅"));
 
-// HTTP + Socket.io
+// ---------- HTTP + Socket ----------
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+const io = new Server(server, {
+  cors: { origin: "*" }
+});
 
+// ---------- Online Users Store ----------
 const onlineUsers = {};
+app.set("onlineUsers", onlineUsers);
 
+// ---------- Socket Logic ----------
 io.on("connection", (socket) => {
   console.log("Socket connected:", socket.id);
 
@@ -60,9 +66,9 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    for (const username in onlineUsers) {
-      if (onlineUsers[username] === socket.id) {
-        delete onlineUsers[username];
+    for (const user in onlineUsers) {
+      if (onlineUsers[user] === socket.id) {
+        delete onlineUsers[user];
         break;
       }
     }
@@ -70,12 +76,19 @@ io.on("connection", (socket) => {
   });
 });
 
-// Connect to MongoDB Atlas
+// ---------- ALERT API (for Python) ----------
+app.use("/api/alert", (req, res, next) => {
+  req.io = io;
+  next();
+}, alertRoutes);
+
+// ---------- MongoDB ----------
 mongoose.connect(process.env.MONGO_URL)
   .then(() => console.log("MongoDB connected"))
   .catch(err => console.error("Mongo error:", err));
 
-
-// Start server on Render's dynamic PORT
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// ---------- Start Server ----------
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
