@@ -1,25 +1,23 @@
 const express = require("express");
 const router = express.Router();
 const Message = require("../models/Message");
-const auth = require("../middleware/authMiddleware");
 
-
-router.get("/:receiver", auth, async (req, res) => {
+// GET conversation
+router.get("/:user1/:user2", async (req, res) => {
   try {
-    const sender = req.user.username;
-    const receiver = req.params.receiver;
+    const { user1, user2 } = req.params;
 
     const messages = await Message.find({
       $or: [
-        { sender, receiver },
-        { sender: receiver, receiver: sender }
+        { sender: user1, receiver: user2 },
+        { sender: user2, receiver: user1 }
       ]
     }).sort({ createdAt: 1 });
 
     res.json(messages);
+
   } catch (err) {
-    console.error("Get messages error:", err.message);
-    res.status(500).json({ error: "Server error fetching messages" });
+    res.status(500).json({ error: "Failed to fetch messages" });
   }
 });
 
