@@ -4,30 +4,22 @@ const Message = require("../models/Message");
 
 router.post("/", async (req, res) => {
   try {
-    const { message, attachment } = req.body;
-    const io = req.io;
-    const onlineUsers = req.onlineUsers;
+    const { sender, receiver, message } = req.body;
 
-    const msg = {
-      sender: "SYSTEM",
-      receiver: "Nithesh",
-      message,
-      attachment: attachment || null,
-      timestamp: new Date()
-    };
+    const newMessage = new Message({
+      sender,
+      receiver,
+      message
+    });
 
-    // ✅ save to DB (prevents disappearing)
-    const savedMessage = await Message.create(msg);
+    await newMessage.save();
 
-    // ✅ send realtime if user online
-    if (onlineUsers["Nithesh"]) {
-      io.to(onlineUsers["Nithesh"]).emit("receiveMessage", savedMessage);
-    }
+    req.io.emit("receiveMessage", newMessage);
 
-    res.json({ success: true });
+    res.status(200).json({ success: true });
 
   } catch (err) {
-    console.error("Alert error:", err);
+    console.error(err);
     res.status(500).json({ error: "Alert failed" });
   }
 });
