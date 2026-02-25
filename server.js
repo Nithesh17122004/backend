@@ -12,36 +12,45 @@ const Message = require("./models/Message");
 
 const app = express();
 
+
 // ---------- Middleware ----------
 app.use(cors());
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "15mb" })); // allow image base64
+
 
 // ---------- API Routes ----------
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 
+
 // Root check
 app.get("/", (req, res) => res.send("Backend is live ✅"));
 
+
 // ---------- HTTP + Socket ----------
 const server = http.createServer(app);
+
 const io = new Server(server, {
   cors: { origin: "*" }
 });
+
 
 // ---------- Online Users Store ----------
 const onlineUsers = {};
 app.set("onlineUsers", onlineUsers);
 
+
 // ---------- Socket Logic ----------
 io.on("connection", (socket) => {
   console.log("Socket connected:", socket.id);
 
+  // user login to socket
   socket.on("login", (username) => {
     onlineUsers[username] = socket.id;
     console.log(`${username} logged in`);
   });
 
+  // normal chat messages
   socket.on("sendMessage", async (data) => {
     try {
       const { sender, receiver, message, attachment } = data;
@@ -50,16 +59,20 @@ io.on("connection", (socket) => {
         sender,
         receiver,
         message: message || "",
-        attachment: attachment || null
+        attachment: attachment || null,
+        timestamp: new Date()
       });
 
       const savedMessage = await newMessage.save();
 
+      // send to receiver if online
       if (onlineUsers[receiver]) {
         io.to(onlineUsers[receiver]).emit("receiveMessage", savedMessage);
       }
 
+      // confirm sender
       io.to(socket.id).emit("messageSent", savedMessage);
+
     } catch (err) {
       console.error("Send message error:", err.message);
     }
@@ -76,16 +89,20 @@ io.on("connection", (socket) => {
   });
 });
 
-// ---------- ALERT API (for Python) ----------
+
+// ---------- ALERT API (for Python SOS) ----------
 app.use("/api/alert", (req, res, next) => {
-  req.io = io;
+  req.io = io;                           // pass socket instance
+  req.onlineUsers = onlineUsers;         // pass online users
   next();
 }, alertRoutes);
+
 
 // ---------- MongoDB ----------
 mongoose.connect(process.env.MONGO_URL)
   .then(() => console.log("MongoDB connected"))
   .catch(err => console.error("Mongo error:", err));
+
 
 // ---------- Start Server ----------
 const PORT = process.env.PORT || 10000;
