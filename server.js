@@ -4,6 +4,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
 require("dotenv").config();
+const path = require("path");
 
 const authRoutes = require("./routes/authRoutes");
 const messageRoutes = require("./routes/messageRoutes");
@@ -12,45 +13,37 @@ const Message = require("./models/Message");
 
 const app = express();
 
-
-// ---------- Middleware ----------
+// middleware
 app.use(cors());
-app.use(express.json({ limit: "15mb" })); // allow image base64
+app.use(express.json({ limit: "10mb" }));
 
+// serve uploaded images
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// ---------- API Routes ----------
+// routes
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 
+// health check
+app.get("/", (req, res) => res.send("Backend running ✅"));
 
-// Root check
-app.get("/", (req, res) => res.send("Backend is live ✅"));
-
-
-// ---------- HTTP + Socket ----------
+// create server + socket
 const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: "*" } });
 
-const io = new Server(server, {
-  cors: { origin: "*" }
-});
-
-
-// ---------- Online Users Store ----------
+// store online users
 const onlineUsers = {};
 app.set("onlineUsers", onlineUsers);
 
-
-// ---------- Socket Logic ----------
+// socket logic
 io.on("connection", (socket) => {
   console.log("Socket connected:", socket.id);
 
-  // user login to socket
   socket.on("login", (username) => {
     onlineUsers[username] = socket.id;
-    console.log(`${username} logged in`);
+    console.log(username + " online");
   });
 
-  // normal chat messages
   socket.on("sendMessage", async (data) => {
     try {
       const { sender, receiver, message, attachment } = data;
@@ -58,23 +51,20 @@ io.on("connection", (socket) => {
       const newMessage = new Message({
         sender,
         receiver,
-        message: message || "",
-        attachment: attachment || null,
-        timestamp: new Date()
+        message,
+        attachment
       });
 
       const savedMessage = await newMessage.save();
 
-      // send to receiver if online
       if (onlineUsers[receiver]) {
         io.to(onlineUsers[receiver]).emit("receiveMessage", savedMessage);
       }
 
-      // confirm sender
       io.to(socket.id).emit("messageSent", savedMessage);
 
     } catch (err) {
-      console.error("Send message error:", err.message);
+      console.error(err);
     }
   });
 
@@ -82,30 +72,22 @@ io.on("connection", (socket) => {
     for (const user in onlineUsers) {
       if (onlineUsers[user] === socket.id) {
         delete onlineUsers[user];
-        break;
       }
     }
-    console.log("Socket disconnected:", socket.id);
   });
 });
 
-
-// ---------- ALERT API (for Python SOS) ----------
+// alert route (Python system)
 app.use("/api/alert", (req, res, next) => {
-  req.io = io;                           // pass socket instance
-  req.onlineUsers = onlineUsers;         // pass online users
+  req.io = io;
   next();
 }, alertRoutes);
 
-
-// ---------- MongoDB ----------
+// mongodb
 mongoose.connect(process.env.MONGO_URL)
   .then(() => console.log("MongoDB connected"))
-  .catch(err => console.error("Mongo error:", err));
+  .catch(err => console.error(err));
 
-
-// ---------- Start Server ----------
+// start server
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+server.listen(PORT, () => console.log("Server running on", PORT));
